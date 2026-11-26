@@ -1,0 +1,405 @@
+diff --git a/package.json b/package.json
+index 1b9c8c6..d190b49 100644
+--- a/package.json
++++ b/package.json
+@@ -3,13 +3,6 @@
+   "type": "module",
+   "private": true,
+   "packageManager": "pnpm@11.8.0",
+-  "devEngines": {
+-    "runtime": {
+-      "name": "node",
+-      "version": "^22.22.1",
+-      "onFail": "download"
+-    }
+-  },
+   "engines": {
+     "node": "^22.22.1"
+   },
+diff --git a/patches/loro-crdt@1.13.5.patch b/patches/loro-crdt@1.13.5.patch
+new file mode 100644
+index 0000000..54c70de
+--- /dev/null
++++ b/patches/loro-crdt@1.13.5.patch
+@@ -0,0 +1,56 @@
++--- a/browser/loro_wasm.js
+++++ b/browser/loro_wasm.js
++@@ -328,9 +328,51 @@
++ }
++ 
++ const wasmUrl = new URL("./loro_wasm_bg.wasm", import.meta.url);
++-const instance = instantiateSync(loadWasmBytesSync(wasmUrl.href), WASM_IMPORTS);
++ 
++-finalize(instance.exports);
+++// [legacy-chromium-patch] Chromium < 115 rejects synchronous
+++// `new WebAssembly.Module(bytes)` on the main thread for anything above 4KB.
+++// The original code ran it at module evaluation time, so importing loro-crdt
+++// threw a RangeError and took down every route that touched it.
+++// Initialization is now explicit: callers `await initLoroWasm()` before using
+++// any exported class. Compilation is async, instantiation stays synchronous,
+++// and the compiled module is cached on globalThis for later re-inits.
+++let loroInstance = null;
+++
+++export function isLoroWasmReady() {
+++  return loroInstance !== null;
+++}
+++
+++export async function initLoroWasm() {
+++  if (loroInstance)
+++    return loroInstance;
+++
+++  let wasmModule = globalThis.__LORO_WASM_MODULE__;
+++  if (!wasmModule) {
+++    const response = await fetch(wasmUrl.href);
+++    if (!response.ok)
+++      throw new Error(`Failed to load loro-crdt WASM from ${wasmUrl.href}: ${response.status} ${response.statusText}`);
+++    wasmModule = await WebAssembly.compile(await response.arrayBuffer());
+++    globalThis.__LORO_WASM_MODULE__ = wasmModule;
+++  }
+++
+++  // `instantiate(Module)` resolves to an Instance; `instantiate(bytes)` resolves
+++  // to `{ module, instance }`. Accept both shapes.
+++  const instantiated = await WebAssembly.instantiate(wasmModule, WASM_IMPORTS);
+++  loroInstance = instantiated.instance || instantiated;
+++  finalize(loroInstance.exports);
+++  return loroInstance;
+++}
+++
+++// Kept for bundlers that ignore the explicit init path.
+++function instantiateLoroSync() {
+++  if (loroInstance)
+++    return loroInstance;
+++
+++  loroInstance = instantiateSync(loadWasmBytesSync(wasmUrl.href), WASM_IMPORTS);
+++  finalize(loroInstance.exports);
+++  return loroInstance;
+++}
+++export { instantiateLoroSync };
++ 
++ export {
++   AwarenessWasm,
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 72aab2b..6aa424f 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -638,6 +638,9 @@ overrides:
+   yaml@>=2.0.0 <2.8.3: 2.9.0
+   yauzl@<3.2.1: 3.2.1
+ 
++patchedDependencies:
++  loro-crdt@1.13.5: b006758a8a8c674bded506171f4f075bd6cf3baeb02abb406458db086d7cc9b9
++
+ importers:
+ 
+   .:
+@@ -660,9 +663,6 @@ importers:
+       eslint-plugin-no-barrel-files:
+         specifier: 'catalog:'
+         version: 1.3.1(eslint@10.5.0(jiti@2.7.0)(supports-color@10.2.2))(typescript@6.0.3)
+-      node:
+-        specifier: runtime:^22.22.1
+-        version: runtime:22.22.3
+       vite:
+         specifier: npm:@voidzero-dev/vite-plus-core@0.2.1
+         version: '@voidzero-dev/vite-plus-core@0.2.1(@types/node@25.9.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.0)'
+@@ -1275,7 +1275,7 @@ importers:
+         version: 0.45.0
+       loro-crdt:
+         specifier: 'catalog:'
+-        version: 1.13.5
++        version: 1.13.5(patch_hash=b006758a8a8c674bded506171f4f075bd6cf3baeb02abb406458db086d7cc9b9)
+       mermaid:
+         specifier: 'catalog:'
+         version: 11.15.0
+@@ -7964,147 +7964,6 @@ packages:
+   node-releases@2.0.36:
+     resolution: {integrity: sha512-TdC8FSgHz8Mwtw9g5L4gR/Sh9XhSP/0DEkQxfEFXOpiul5IiHgHan2VhYYb6agDSfp4KuvltmGApc8HMgUrIkA==}
+ 
+-  node@runtime:22.22.3:
+-    resolution:
+-      type: variations
+-      variants:
+-        - resolution:
+-            archive: tarball
+-            bin:
+-              node: bin/node
+-            integrity: sha256-QAJqz3ioCOQ9IioLDg5xG5X/J5NGlreSW1Mpi8fIxgo=
+-            type: binary
+-            url: https://nodejs.org/download/release/v22.22.3/node-v22.22.3-aix-ppc64.tar.gz
+-          targets:
+-            - cpu: ppc64
+-              os: aix
+-        - resolution:
+-            archive: tarball
+-            bin:
+-              node: bin/node
+-            integrity: sha256-Daf/dO+GETKMghLxeUM2hxOirZU/t9iajIoOrofCMgc=
+-            type: binary
+-            url: https://nodejs.org/download/release/v22.22.3/node-v22.22.3-darwin-arm64.tar.gz
+-          targets:
+-            - cpu: arm64
+-              os: darwin
+-        - resolution:
+-            archive: tarball
+-            bin:
+-              node: bin/node
+-            integrity: sha256-RYMLp1L6DYksbc1kCUZmmAEpPKyCCjNZHe1ArAdRmOw=
+-            type: binary
+-            url: https://nodejs.org/download/release/v22.22.3/node-v22.22.3-darwin-x64.tar.gz
+-          targets:
+-            - cpu: x64
+-              os: darwin
+-        - resolution:
+-            archive: tarball
+-            bin:
+-              node: bin/node
+-            integrity: sha256-zIvIKy3QtZXDuVpMPJyMNQkHz/ARr73uPRN56BLh4+M=
+-            type: binary
+-            url: https://nodejs.org/download/release/v22.22.3/node-v22.22.3-linux-arm64.tar.gz
+-          targets:
+-            - cpu: arm64
+-              os: linux
+-        - resolution:
+-            archive: tarball
+-            bin:
+-              node: bin/node
+-            integrity: sha256-GPvhv91CBFrxXwIlauPllJDRuf+T38J6IjrMLJJ0AlA=
+-            type: binary
+-            url: https://nodejs.org/download/release/v22.22.3/node-v22.22.3-linux-armv7l.tar.gz
+-          targets:
+-            - cpu: armv7l
+-              os: linux
+-        - resolution:
+-            archive: tarball
+-            bin:
+-              node: bin/node
+-            integrity: sha256-qQ9SPPFk4cdhv0xZtcaqDZ1VKJJwGraUmeaD7h/Aa7w=
+-            type: binary
+-            url: https://nodejs.org/download/release/v22.22.3/node-v22.22.3-linux-ppc64le.tar.gz
+-          targets:
+-            - cpu: ppc64le
+-              os: linux
+-        - resolution:
+-            archive: tarball
+-            bin:
+-              node: bin/node
+-            integrity: sha256-S4TkPCnZDk+QGBXDmRBqSa9O5zDRKTOvgsgtTcRQMIw=
+-            type: binary
+-            url: https://nodejs.org/download/release/v22.22.3/node-v22.22.3-linux-s390x.tar.gz
+-          targets:
+-            - cpu: s390x
+-              os: linux
+-        - resolution:
+-            archive: tarball
+-            bin:
+-              node: bin/node
+-            integrity: sha256-x6ENaBbajqqnU03XPHHG4rLDkdu/hF42SQLRVmFd0bg=
+-            type: binary
+-            url: https://nodejs.org/download/release/v22.22.3/node-v22.22.3-linux-x64.tar.gz
+-          targets:
+-            - cpu: x64
+-              os: linux
+-        - resolution:
+-            archive: zip
+-            bin:
+-              node: node.exe
+-            integrity: sha256-AL4SmgnohyzVLTu4u6EkEsVzPSIkEjpIKi3KSm+/JYY=
+-            prefix: node-v22.22.3-win-arm64
+-            type: binary
+-            url: https://nodejs.org/download/release/v22.22.3/node-v22.22.3-win-arm64.zip
+-          targets:
+-            - cpu: arm64
+-              os: win32
+-        - resolution:
+-            archive: zip
+-            bin:
+-              node: node.exe
+-            integrity: sha256-bI1U9jX+/033bCyoD0UzLrL/V9JSJu3ONlkuUaF37jM=
+-            prefix: node-v22.22.3-win-x64
+-            type: binary
+-            url: https://nodejs.org/download/release/v22.22.3/node-v22.22.3-win-x64.zip
+-          targets:
+-            - cpu: x64
+-              os: win32
+-        - resolution:
+-            archive: zip
+-            bin:
+-              node: node.exe
+-            integrity: sha256-e6QmD2nha6libQd8sRJPP7AfYEIa8qbHOWrrTi0Nja4=
+-            prefix: node-v22.22.3-win-x86
+-            type: binary
+-            url: https://nodejs.org/download/release/v22.22.3/node-v22.22.3-win-x86.zip
+-          targets:
+-            - cpu: x86
+-              os: win32
+-        - resolution:
+-            archive: tarball
+-            bin:
+-              node: bin/node
+-            integrity: sha256-Cch6y6+uZeGPzA6xiDdsElTKt03HaRGPS2BHnF+jJs8=
+-            type: binary
+-            url: https://unofficial-builds.nodejs.org/download/release/v22.22.3/node-v22.22.3-linux-arm64-musl.tar.gz
+-          targets:
+-            - cpu: arm64
+-              os: linux
+-              libc: musl
+-        - resolution:
+-            archive: tarball
+-            bin:
+-              node: bin/node
+-            integrity: sha256-0idpJYPWrhfEQCj9jxfLGzZyFnprqgNYGCQMu5226ko=
+-            type: binary
+-            url: https://unofficial-builds.nodejs.org/download/release/v22.22.3/node-v22.22.3-linux-x64-musl.tar.gz
+-          targets:
+-            - cpu: x64
+-              os: linux
+-              libc: musl
+-    version: 22.22.3
+-
+   normalize-package-data@8.0.0:
+     resolution: {integrity: sha512-RWk+PI433eESQ7ounYxIp67CYuVsS1uYSonX3kA6ps/3LWfjVQa/ptEg6Y3T6uAMq1mWpX9PQ+qx+QaHpsc7gQ==}
+     engines: {node: ^20.17.0 || >=22.9.0}
+@@ -16587,7 +16446,7 @@ snapshots:
+     dependencies:
+       js-tokens: 4.0.0
+ 
+-  loro-crdt@1.13.5: {}
++  loro-crdt@1.13.5(patch_hash=b006758a8a8c674bded506171f4f075bd6cf3baeb02abb406458db086d7cc9b9): {}
+ 
+   loupe@3.2.1: {}
+ 
+@@ -17278,8 +17137,6 @@ snapshots:
+ 
+   node-releases@2.0.36: {}
+ 
+-  node@runtime:22.22.3: {}
+-
+   normalize-package-data@8.0.0:
+     dependencies:
+       hosted-git-info: 9.0.2
+diff --git a/pnpm-workspace.yaml b/pnpm-workspace.yaml
+index 39c72fa..0824b59 100644
+--- a/pnpm-workspace.yaml
++++ b/pnpm-workspace.yaml
+@@ -11,6 +11,8 @@ allowBuilds:
+   canvas: false
+   esbuild: false
+   sharp: false
++patchedDependencies:
++  loro-crdt@1.13.5: patches/loro-crdt@1.13.5.patch
+ autoInstallPeers: false
+ blockExoticSubdeps: true
+ shellEmulator: true
+diff --git a/web/Dockerfile b/web/Dockerfile
+index 72b2a50..4d99b71 100644
+--- a/web/Dockerfile
++++ b/web/Dockerfile
+@@ -22,6 +22,9 @@ FROM base AS packages
+ WORKDIR /app
+ 
+ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml /app/
++# [legacy-chromium-patch] pnpm-workspace.yaml 里的 patchedDependencies 指向仓库根的
++# patches/，少了这一行 `pnpm install --frozen-lockfile` 会因为找不到 patch 文件失败。
++COPY patches /app/patches
+ COPY web/package.json /app/web/
+ COPY e2e/package.json /app/e2e/
+ COPY sdks/nodejs-client/package.json /app/sdks/nodejs-client/
+diff --git a/web/app/components/workflow/collaboration/core/collaboration-manager.ts b/web/app/components/workflow/collaboration/core/collaboration-manager.ts
+index a80e493..2779fa6 100644
+--- a/web/app/components/workflow/collaboration/core/collaboration-manager.ts
++++ b/web/app/components/workflow/collaboration/core/collaboration-manager.ts
+@@ -19,9 +19,10 @@ import type {
+ } from '../types/collaboration'
+ import { cloneDeep } from 'es-toolkit/object'
+ import { isEqual } from 'es-toolkit/predicate'
+-import { LoroDoc, LoroList, LoroMap, UndoManager } from 'loro-crdt'
++import type { LoroDoc, LoroList, LoroMap, UndoManager } from 'loro-crdt'
+ import { CRDTProvider } from './crdt-provider'
+ import { EventEmitter } from './event-emitter'
++import { getLoroRuntime, loadLoroRuntime } from './loro-runtime'
+ import { emitWithAuthGuard, webSocketClient } from './websocket-manager'
+ 
+ type NodePanelPresenceEventData = {
+@@ -229,7 +230,7 @@ export class CollaborationManager {
+ 
+     if (!container || !isMapContainer(container)) {
+       const previousValue = container
+-      const newContainer = this.nodesMap.setContainer(nodeId, new LoroMap())
++      const newContainer = this.nodesMap.setContainer(nodeId, new (getLoroRuntime().LoroMap)())
+       const attached = (newContainer as LoroContainer).getAttached?.() ?? newContainer
+       container = attached
+       if (previousValue && typeof previousValue === 'object')
+@@ -247,7 +248,7 @@ export class CollaborationManager {
+     let dataContainer = nodeContainer.get('data') as unknown
+ 
+     if (!dataContainer || typeof (dataContainer as LoroContainer).kind !== 'function' || (dataContainer as LoroContainer).kind?.() !== 'Map')
+-      dataContainer = nodeContainer.setContainer('data', new LoroMap())
++      dataContainer = nodeContainer.setContainer('data', new (getLoroRuntime().LoroMap)())
+ 
+     const attached = (dataContainer as LoroContainer).getAttached?.() ?? dataContainer
+     return attached as LoroMap<Record<string, Value>>
+@@ -258,7 +259,7 @@ export class CollaborationManager {
+     let list = dataContainer.get(key) as unknown
+ 
+     if (!list || typeof (list as LoroContainer).kind !== 'function' || (list as LoroContainer).kind?.() !== 'List')
+-      list = dataContainer.setContainer(key, new LoroList())
++      list = dataContainer.setContainer(key, new (getLoroRuntime().LoroList)())
+ 
+     const attached = (list as LoroContainer).getAttached?.() ?? list
+     return attached as LoroList<unknown>
+@@ -502,12 +503,14 @@ export class CollaborationManager {
+     // Setup event listeners BEFORE any other operations
+     this.setupSocketEventListeners(socket)
+ 
+-    this.doc = new LoroDoc()
++    const loro = await loadLoroRuntime()
++
++    this.doc = new loro.LoroDoc()
+     this.nodesMap = this.doc.getMap('nodes') as LoroMap<Record<string, Value>>
+     this.edgesMap = this.doc.getMap('edges') as LoroMap<Record<string, Value>>
+ 
+     // Initialize UndoManager for collaborative undo/redo
+-    this.undoManager = new UndoManager(this.doc, {
++    this.undoManager = new loro.UndoManager(this.doc, {
+       maxUndoSteps: 100,
+       mergeInterval: 500, // Merge operations within 500ms
+       excludeOriginPrefixes: [], // Don't exclude anything - let UndoManager track all local operations
+diff --git a/web/app/components/workflow/collaboration/core/loro-runtime.ts b/web/app/components/workflow/collaboration/core/loro-runtime.ts
+new file mode 100644
+index 0000000..13926c5
+--- /dev/null
++++ b/web/app/components/workflow/collaboration/core/loro-runtime.ts
+@@ -0,0 +1,33 @@
++type LoroModule = typeof import('loro-crdt') & {
++  initLoroWasm?: () => Promise<unknown>
++}
++
++let runtimePromise: Promise<LoroModule> | null = null
++let runtimeModule: LoroModule | null = null
++
++/** 同步取已初始化的 loro 模块，供 `new LoroMap()` 这类运行时构造使用。 */
++export function getLoroRuntime(): LoroModule {
++  if (!runtimeModule)
++    throw new Error('loro-crdt 尚未初始化，调用前需先 await loadLoroRuntime()')
++  return runtimeModule
++}
++
++/**
++ * loro-crdt 的 browser 入口原本在模块求值阶段就同步编译约 3.1MB 的 wasm。
++ * Chromium < 115 会因此抛 RangeError 并把整个 chunk 打挂，表现为页面提示
++ * “渲染此组件时发生了意外错误”。这里把初始化改成显式异步：先 await
++ * initLoroWasm()（内部走 WebAssembly.compile），再返回模块；调用方拿到
++ * 模块后即可照常同步 new LoroDoc()。
++ */
++export function loadLoroRuntime(): Promise<LoroModule> {
++  if (!runtimePromise) {
++    runtimePromise = (async () => {
++      const mod = (await import('loro-crdt')) as LoroModule
++      if (typeof window !== 'undefined' && typeof mod.initLoroWasm === 'function')
++        await mod.initLoroWasm()
++      runtimeModule = mod
++      return mod
++    })()
++  }
++  return runtimePromise
++}

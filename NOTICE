@@ -1,0 +1,24 @@
+dify-legacy-chromium
+====================
+
+本仓库是一组非官方补丁，用于让 Dify 在 Chromium 90 - 114 区间的浏览器上正常运行。
+
+上游项目：https://github.com/langgenius/dify
+上游许可证：Dify Open Source License（Apache License 2.0 加附加条款）
+
+声明：
+
+1、本仓库与 LangGenius, Inc. 无隶属、合作或背书关系。"Dify" 是其所有者的商标，
+   本仓库仅作描述性引用。
+
+2、patches/ 目录下的补丁以及它们对 Dify 源码造成的修改属于衍生作品，
+   依 Dify Open Source License 分发，全文见 LICENSE。使用本仓库前请先阅读该许可证，
+   特别注意其中两条附加限制：
+   - 未经书面授权，不得使用 Dify 源码运营多租户环境（一个 workspace 视为一个租户）；
+   - 使用 Dify 前端（web/ 目录或 web 镜像）时，不得移除或修改控制台与应用中的
+     LOGO 与版权信息。本仓库的所有补丁均未触碰这两处，使用者也请不要借适配之名去改。
+
+3、tools/ 目录下的脚本与 polyfill 是本仓库的原创实现，以 MIT 分发，全文见 LICENSE-TOOLS。
+   它们可以脱离 Dify 单独用于任何 Next.js / Tailwind v4 项目。
+
+4、Dify 源码本身的版权归 LangGenius, Inc. 及各位贡献者所有。

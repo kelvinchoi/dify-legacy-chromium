@@ -1,0 +1,110 @@
+name: Bug 报告
+description: 应用补丁后仍然白屏、样式异常或控制台报错
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。这个项目的多数问题都能从「内核版本 + Dify 版本 + 打了哪些补丁」三件事定位，请尽量填全。
+        提之前建议先看 [已知限制](https://github.com/kelvinchoi/dify-legacy-chromium#已知限制)，该节列出的现象属于预期行为。
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 现象描述
+      description: 具体看到什么，越具体越好。
+      placeholder: 打开工作流编辑器后整页空白，控制台首条错误是 ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: 现象类型
+      options:
+        - 白屏 / 页面完全打不开
+        - 样式全部丢失（无 CSS）
+        - 局部错位、位移或高度不对
+        - 交互失效但页面能看
+        - 控制台报错但功能正常
+        - 其它
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: 浏览器与内核版本
+      description: 内核版本必填，可在浏览器地址栏执行 `chrome://version` 获取。只写浏览器名无法定位。
+      placeholder: Chrome/Chromium 90.0.4430.246
+    validations:
+      required: true
+
+  - type: input
+    id: dify-version
+    attributes:
+      label: Dify 版本
+      description: 上游 tag 或 commit sha。本仓库补丁针对 upstream.json 里钉死的版本，版本不符大概率应用失败。
+      placeholder: 1.15.0 / 3aa26fb
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: patches
+    attributes:
+      label: 已应用的补丁
+      description: 勾选实际应用的编号。只打一部分时，白屏通常是 0001 未应用。
+      options:
+        - label: 0001-loro-async-wasm-init（wasm 异步初始化）
+        - label: 0002-legacy-chrome-polyfills（17 项 JS API）
+        - label: 0003-skip-link-transform（skip link 位移）
+        - label: 0004-postbuild-css-downlevel（@layer 拍平）
+        - label: 0005-basepath-static-assets（子路径静态资源）
+
+  - type: dropdown
+    id: deploy
+    attributes:
+      label: 部署路径
+      description: 部署在域名根路径还是子路径，会影响 basePath 相关行为。
+      options:
+        - 根路径（/）
+        - 子路径（如 /dify）
+        - 不确定
+    validations:
+      required: true
+
+  - type: textarea
+    id: build-command
+    attributes:
+      label: 构建与启动命令
+      description: 贴出 `pnpm build` 前后的实际命令，含环境变量。
+      render: shell
+      placeholder: |
+        cd web && NEXT_PUBLIC_BASE_PATH=/dify pnpm build
+
+  - type: textarea
+    id: verify-output
+    attributes:
+      label: verify.sh 输出
+      description: 运行 `bash scripts/verify.sh ./dify/web` 的完整输出，它会打印产物里残留的高版本特性数量。
+      render: shell
+
+  - type: textarea
+    id: console
+    attributes:
+      label: 控制台报错
+      description: 优先贴第一条错误，以及失败的网络请求（含完整 URL）。
+      render: shell
+
+  - type: checkboxes
+    id: self-check
+    attributes:
+      label: 自查
+      options:
+        - label: 已阅读 README 的「已知限制」一节
+          required: true
+        - label: 已运行 verify.sh 并附上输出
+          required: true
+        - label: 确认使用的 Dify 版本与 upstream.json 一致
+          required: true

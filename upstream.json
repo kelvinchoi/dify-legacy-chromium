@@ -1,0 +1,10 @@
+{
+  "upstream": "https://github.com/langgenius/dify",
+  "license": "Dify Open Source License (Apache-2.0 + additional conditions)",
+  "version": "1.15.0",
+  "tag": "1.15.0",
+  "commit": "3aa26fb6374bbd47e5469f7d7cc25f3e0075a60c",
+  "baselineBrowser": "Chromium 90.0.4430.246",
+  "supportedRange": "Chromium 90 - 114",
+  "notes": "补丁以 commit sha 为基准而不是 tag —— tag 可以移动，sha 不会。升级上游时改这个文件，再跑 scripts/rebase-upstream.sh。"
+}

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用与构建文档
+    url: https://github.com/kelvinchoi/dify-legacy-chromium/blob/main/docs/build.md
+    about: 构建、Docker 部署与子路径（basePath）配置的完整说明
+  - name: 兼容性数据
+    url: https://github.com/kelvinchoi/dify-legacy-chromium/blob/main/docs/compatibility.md
+    about: 各特性的内核门槛与实测基线，先看这里确认现象是否属于预期
+  - name: 已知限制
+    url: https://github.com/kelvinchoi/dify-legacy-chromium/blob/main/README.md#已知限制
+    about: 视觉降级、PWA、版本跟进等已知边界

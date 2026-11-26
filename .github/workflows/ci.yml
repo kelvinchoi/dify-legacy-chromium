@@ -1,0 +1,108 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  patch-check:
+    name: 补丁能干净应用到上游
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: 按 upstream.json 取上游源码
+        run: |
+          set -euo pipefail
+          COMMIT=$(node -p "require('./upstream.json').commit")
+          echo "pinned commit: $COMMIT"
+          git clone --filter=blob:none https://github.com/langgenius/dify.git dify
+          cd dify
+          git checkout --detach "$COMMIT"
+
+      - name: 逐条 apply
+        run: bash scripts/apply.sh ./dify
+
+      - name: 确认补丁产生了改动
+        run: |
+          set -euo pipefail
+          cd dify
+          git status --porcelain | tee /tmp/changed.txt
+          if [ ! -s /tmp/changed.txt ]; then
+            echo "::error::补丁应用后没有任何改动，patch 可能已经失效"
+            exit 1
+          fi
+
+      - name: 检查关键文件确实被改到
+        run: |
+          set -euo pipefail
+          cd dify
+          test -f web/polyfills/legacy-chrome.ts
+          test -f web/scripts/legacy-css-downlevel.mjs
+          test -f web/app/components/workflow/collaboration/core/loro-runtime.ts
+          grep -q 'legacy-css-downlevel' web/package.json
+          grep -q 'patchedDependencies' pnpm-workspace.yaml
+          grep -q 'COPY patches /app/patches' web/Dockerfile
+          grep -q 'NEXT_PUBLIC_BASE_PATH' web/app/layout.tsx
+
+  tools-check:
+    name: 工具自身可用
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: 语法检查
+        run: |
+          node --check tools/css-downlevel.mjs
+          node -e "new Function(require('fs').readFileSync('tools/legacy-chrome.ts','utf8'))" 2>/dev/null \
+            || echo "legacy-chrome.ts 是 TS，跳过 runtime 解析检查"
+
+      - name: "@layer 拍平的冒烟测试"
+        run: |
+          set -euo pipefail
+          FIX=$(mktemp -d)
+          cat > "$FIX/a.css" <<'CSS'
+          @layer theme, base, components, utilities;
+          @layer theme { :root { --x: 1px } }
+          @layer base { .base-rule { padding: 0 } }
+          @layer utilities { .utility-rule { margin-top: 4px } }
+          CSS
+          node tools/css-downlevel.mjs "$FIX"
+          if grep -q '@layer' "$FIX/a.css"; then
+            echo "::error::@layer 仍然残留"
+            cat "$FIX/a.css"
+            exit 1
+          fi
+          grep -q 'utility-rule' "$FIX/a.css"
+          grep -q 'base-rule' "$FIX/a.css"
+          # 幂等：再跑一次结果不变
+          cp "$FIX/a.css" "$FIX/once.css"
+          node tools/css-downlevel.mjs "$FIX"
+          diff -q "$FIX/once.css" "$FIX/a.css"
+
+      - name: 括号失衡时必须报错而不是写坏文件
+        run: |
+          set -euo pipefail
+          FIX=$(mktemp -d)
+          # 注意：必须让「剥掉 @layer 语法之后」仍然不平衡。
+          # 只缺一层闭合时，展开会正好把它补平，脚本不会报错——那是预期行为。
+          printf '@layer utilities { .broken { color: red\n' > "$FIX/b.css"
+          BEFORE=$(cat "$FIX/b.css")
+          if node tools/css-downlevel.mjs "$FIX" >/dev/null 2>&1; then
+            echo "::error::输入失衡时脚本没有报错"
+            exit 1
+          fi
+          if [ "$BEFORE" != "$(cat "$FIX/b.css")" ]; then
+            echo "::error::报错时不应写回文件"
+            exit 1
+          fi

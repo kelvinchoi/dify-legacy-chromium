@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+
+# rebase-upstream.sh 的备份目录
+patches.bak-*/
